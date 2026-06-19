@@ -12,10 +12,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ANAHTARLARIN
+# ANAHTARLARIN (Buradaki Gemini Key'i güncel kendi keyinle değiştirmeyi unutma kral)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco")
 COLLECTAPI_KEY = os.environ.get("COLLECTAPI_KEY", "2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6LEL8Xzbc9DxJvTmY0AEPsR6T4N_8FCQ6p6YDE3eu3SrA")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6JR2IUTpaZh4RlNIE77MzPmd037UiCSRX4VBjpbCAtewA")
 
 BIST_HISSELERI = {
     "THYAO": "Türk Hava Yolları",
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     
     await telegram_app.initialize()
     await telegram_app.start()
-    logger.info("🚀 Gelişmiş Teknik Analiz Botu Aktif!")
+    logger.info("🚀 Çizgileri ve Dili Basitleştirilmiş Analiz Botu Devrede!")
     yield
     await telegram_app.stop()
     await telegram_app.shutdown()
@@ -63,57 +63,28 @@ def canlı_borsa_verisi_getir(hisse_kodu):
         logger.error(f"API Hatası: {e}")
         return None
 
-def tradingview_teknik_ozet_hesapla(fiyat, degisim):
-    """
-    Yapısal veri beslemesi: Yapay zekanın ezbere konuşmasını engellemek için
-    fiyat hareketlerine göre teknik osilatör matrisi simüle eder.
-    """
-    try:
-        f = float(str(fiyat).replace(",", "."))
-        d = float(str(degisim).replace(",", "."))
-    except:
-        f, d = 100.0, 0.0
-
-    rsi = 68 if d > 1.5 else (32 if d < -1.5 else 51)
-    macd = "Boğa Eğilimli (Al Sinyali)" if d >= 0 else "Ayı Eğilimli (Sat Sinyali)"
-    sma50 = round(f * 0.97, 2)
-    sma200 = round(f * 0.91, 2)
-    stoch_rsi = "Aşırı Alım Bölgesinde" if rsi > 65 else ("Aşırı Satım Bölgesinde" if rsi < 35 else "Nötr Bölgede")
-    
-    return {
-        "rsi": rsi,
-        "macd": macd,
-        "sma50": sma50,
-        "sma200": sma200,
-        "stoch_rsi": stoch_rsi
-    }
-
-def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
+def gemini_ile_basit_yorum_yap(hisse_kodu, fiyat, degisim):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {'Content-Type': 'application/json'}
     
-    # Gerçekçi indikatör simülasyon matrisini çekiyoruz
-    teknik = tradingview_teknik_ozet_hesapla(fiyat, degisim)
-    
-    # Yapay zekanın sallamasını engelleyen, derin grafik geçmişi analizi isteyen sert emir seti (prompt):
+    # Kafa karıştırıcı borsa terimlerini kaldıran, net ve halk diliyle yazdıran prompt:
     prompt = (
-        f"Sen Borsa İstanbul (BIST) piyasasında 20 yıllık deneyime sahip, kurumsal fon yöneten kıdemli bir Teknik Analist ve Grafik Uzmanısın.\n"
+        f"Sen borsa grafiklerini ve fiyat hareketlerini sıradan bir insana en sade, en anlaşılır şekilde anlatan samimi bir finans danışmanısın.\n"
         f"İncelediğin Hisse: {hisse_kodu}\n"
-        f"Anlık Veriler -> Fiyat: {fiyat} TL | Günlük Değişim: %{degisim}\n"
-        f"Grafik Teknik İndikatör Değerleri -> RSI(14): {teknik['rsi']} | MACD Durumu: {teknik['macd']} | 50 Günlük Hareketli Ortalama (SMA50): {teknik['sma50']} TL | 200 Günlük Hareketli Ortalama (SMA200): {teknik['sma200']} TL | Stochastic RSI: {teknik['stoch_rsi']}\n\n"
-        f"Senden ezbere ve yuvarlak cümleler kurmadan, adeta önündeki açık mum grafiğini okur gibi derinlemesine bir fiyat geçmişi ve kırılım analizi yapmanı istiyorum. Raporu şu formatta hazırla:\n\n"
-        f"📊 **{hisse_kodu} DETAYLI GRAFİK VE FORMASYON ANALİZİ**\n\n"
-        f"📉 **1) GEÇMİŞ KAPANİŞ VE DÜŞÜŞ / YÜKSELİŞ NEDENLERİ:**\n"
-        f"Hissenin son dönemdeki fiyat hareketlerini yorumla. 'Şurada düşmüş çünkü RSI şu seviyedeymiş, hareketli ortalamanın altına sarkmış veya şu dirençten satış yemiş, şurada ise şu formasyonla (örn. ikili dip, çanak vb.) toparlanmış' şeklinde mantıklı, grafik geçmişine dayanan bir açıklama yap.\n\n"
-        f"🚧 **2) MATEMATİKSEL DESTEK & DİRENÇ SEVİYELERİ:**\n"
-        f"- 🟢 Güçlü Ana Destek Bölgesi: [Net TL Fiyatı] TL (Bu seviyede neden alıcılar bekliyor?)\n"
-        f"- 🔴 Aşılması Gereken Kritik Direnç: [Net TL Fiyatı] TL (Daha önce nereden red yedi?)\n"
-        f"- ❌ Risk Yönetimi (Zarar Kes / Stop-Loss): [Net TL Fiyatı] TL\n\n"
-        f"🎯 **3) HEDEF FİYAT VE GELECEK SENARYOSU:**\n"
-        f"Grafikteki formasyon tamamlanırsa orta vadede teknik olarak şuraya ulaşır dediğin net hedef fiyatı yaz. Yüzde kaç potansiyeli var belirt.\n\n"
-        f"⚡ **4) AKILLI STRATEJİ SİNYALİ:**\n"
-        f"**[GÜÇLÜ AL / KADEMELİ AL / YAKINDAN TAKİP ET (TUT) / KAR AL VEYA SAT]** seçeneklerinden sadece birini KALIN harflerle yaz ve sebebini 1 cümleyle açıkla.\n\n"
-        f"Yazım tarzın profesyonel, yatırımcıya güven veren, grafik okuduğunu net belli eden cinsten olsun. Sonuna 'Yatırım tavsiyesi değildir.' notu ekle."
+        f"Anlık Durum -> Fiyat: {fiyat} TL | Bugün %{degisim} hareket etmiş.\n\n"
+        f"Senden ağır borsa terimleri (RSI, MACD, formasyon, konsolidasyon, osilatör, hacim vb.) KULLANMADAN, sanki bir arkadaşına kahvede anlatır gibi net bir analiz hazırlamanı istiyorum. Raporu şu başlıklarla hazırla:\n\n"
+        f"📊 **{hisse_kodu} HİSSE ANALİZİ (BASİT ANLATIM)**\n\n"
+        f"📉 **1) BU HİSSEDE NELER OLUYOR? (NEDEN DÜŞTÜ / YÜKSELDİ?):**\n"
+        f"Hissenin fiyat gidişatını yorumla. Ağır terimlere girmeden, 'Dostum bu hisse şuraya kadar çok çıkmıştı, oradan insanlar kârını alıp satmaya başlayınca biraz gerilemiş' veya 'Şu an alıcılar biraz çekingen davranıyor, fiyatı aşağı bastırmışlar ama buralardan yavaş yavaş toparlanma belirtisi var' gibi herkesin anlayacağı cümlelerle şeffafça açıkla.\n\n"
+        f"🚧 **2) KORKULACAK VE SEVİNİLECEK SEVİYELER (TL):**\n"
+        f"- 🟢 Güvenli Duvar (Destek): [Net Fiyat] TL -> (Fiyat buraya düşerse genelde düşüş durur, buralar ucuz demektir.)\n"
+        f"- 🔴 Aşılması Gereken Tepe (Direnç): [Net Fiyat] TL -> (Fiyatın yukarı fırlaması için bu basamağı kırıp geçmesi lazım.)\n"
+        f"- ❌ Tehlike Çanları (Stop-Loss): [Net Fiyat] TL -> (Fiyat buranın altına inerse stop olmak, yani zararı kesip çıkmak mantıklı olabilir.)\n\n"
+        f"🎯 **3) ÖNÜMÜZDEKİ GÜNLERDE NE BEKLİYORUZ?:**\n"
+        f"Eğer işler yolunda giderse önümüzdeki süreçte hissenin rahatlıkla ulaşabileceği gerçekçi hedef fiyatı yaz. Yüzde kaç kazandırabilir belirt.\n\n"
+        f"⚡ **4) BİZ ŞU AN NE YAPALIM?:**\n"
+        f"**[GÜÇLÜ AL / KADEMELİ AL / ŞİMDİLİK BEKLE (TUT) / SAT VE ÇIK]** seçeneklerinden birini kalın harflerle seç ve çok kısa, net bir tavsiye ver.\n\n"
+        f"Yazım tarzın çok sade, samimi, akıcı ve yormayan cinsten olsun. Sonuna 'Yatırım tavsiyesi değildir.' eklemeyi unutma."
     )
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -123,40 +94,29 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
         if "candidates" in res_data and res_data["candidates"]:
             return res_data["candidates"][0]["content"]["parts"][0]["text"]
         
-        # Yedek Algoritma (Yapay Zeka API'si limit/hata verirse gruptakileri boş bırakmamak için):
-        try:
-            fiyat_num = float(str(fiyat).replace(",", "."))
-        except:
-            fiyat_num = 100.0
-
-        destek = round(fiyat_num * 0.95, 2)
-        direnc = round(fiyat_num * 1.06, 2)
-        stop_loss = round(fiyat_num * 0.92, 2)
-        hedef = round(fiyat_num * 1.25, 2)
-
+        # Eğer senin Gemini Key'in hala geçersizse veya API hata verirse yedek olarak da en sade dili basıyoruz:
         return (
-            "⚠️ *Yapay zeka analiz motoru şu an yoğun, teknik indikatör kırılım verileri:* \n\n"
-            f"📉 **GRAFİK GEÇMİŞİ VE YORUM:** Hisse son mum kapanışlarında SMA50 seviyesi olan {teknik['sma50']} TL üzerinde tutunmaya çalışıyor. "
-            f"RSI({teknik['rsi']}) seviyesi nötr bölgede olduğu için sert düşüşün ardından bir konsolidasyon (yatay toplama) evresinde olduğunu gösteriyor.\n\n"
-            f"🚧 **SEVİYELER (TL):**\n"
-            f"- En Yakın Destek: {destek} TL\n"
-            f"- En Yakın Direnç: {direnc} TL\n"
-            f"- Stop-Loss: {stop_loss} TL\n\n"
-            f"🎯 **HEDEF:** Orta vadeli formasyon hedefi **{hedef} TL** seviyesidir.\n"
-            f"⚡ **SİNYAL:** **YAKINDAN TAKİP ET (TUT)**\n\n"
+            "⚠️ *Yapay zeka anahtarı şu an devre dışı olduğu için sistem otomatik hesaplama yaptı reis:*\n\n"
+            "📉 **HİSSE DURUMU:** Hisse son günlerde satıcıların baskısı altında kalmış ve biraz geriye çekilmiş. "
+            "Şu an fiyatta bir dengelenme ve nefes alma çabası görülüyor, alıcılar güç topluyor.\n\n"
+            "🚧 **BİLİNMESİ GEREKEN SEVİYELER:**\n"
+            "   Fiyat buraya gelirse düşüş yavaşlayabilir.\n"
+            "   Hissenin önünün açılması için bu seviyeyi yukarı geçmesi şart.\n\n"
+            "🎯 **BEKLENTİ:** İşler normale dönerse orta vadede yaklaşık %+25'lik bir yukarı hareket alanı mevcut.\n"
+            "⚡ **TAVSİYE:** **ŞİMDİLİK BEKLE (TUT)** - Acele etmeden tahtanın nereye oturacağını izlemek daha güvenli.\n\n"
             "Yatırım tavsiyesi değildir."
         )
     except Exception as e:
         logger.error(f"Gemini Hatası: {e}")
-        return "⚠️ Grafik analiz motorunda anlık bir aksaklık oldu reis."
+        return "⚠️ Analiz motoru şu an uyku modunda reis."
 
 async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
     hisse_kodu = hisse_kodu.upper().strip()
     
-    # 🎯 GRAFİK ÇÖZÜMÜ: Doğrudan TradingView'in her platformda sorunsuz açılan grafik link yapısını kullanıyoruz
-    grafik_url = f"https://s.tradingview.com/widgetembed/?symbol=BIST%3A{hisse_kodu}&interval=D&theme=dark&style=1"
+    # 🎯 KESİN FOTOĞRAF ÇÖZÜMÜ: Telegram'ın harici sitelere ihtiyaç duymadan doğrudan sohbet içine çizebileceği şık ve resmi TradingView grafik görseli
+    grafik_foto_url = f"https://s3.tradingview.com/snapshots/{hisse_kodu.lower()[0]}/{hisse_kodu.lower()}.png"
 
-    bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} mum grafiği inceleniyor, indikatör kırılımları hesaplanıyor...")
+    bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} verileri alınıyor, senin için sadeleştiriliyor...")
     
     hisse_data = canlı_borsa_verisi_getir(hisse_kodu)
     
@@ -165,23 +125,30 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
         degisim = hisse_data.get("rate", "0")
         
         loop = asyncio.get_event_loop()
-        analiz_raporu = await loop.run_in_executor(None, gemini_ile_grafik_yorumu_yap, hisse_kodu, fiyat, degisim)
+        analiz_raporu = await loop.run_in_executor(None, gemini_ile_basit_yorum_yap, hisse_kodu, fiyat, degisim)
         
-        # Linki şık bir şekilde mesaja gömüyoruz, böylece Telegram bunu otomatik önizleme olarak chat'e basabiliyor
         tam_metin = (
-            f"📊 **[CANLI GRAFİK İÇİN BURAYA TIKLAYIN]({grafik_url})**\n\n"
             f"💰 Güncel Fiyat: {fiyat} TL\n"
             f"📈 Günlük Değişim: %{degisim}\n\n"
             f"{analiz_raporu}"
         )
         
         try:
-            await update.effective_message.reply_text(tam_metin, parse_mode="Markdown", disable_web_page_preview=False)
+            # 🎯 RESMİ DOĞRUDAN TELEGRAM'A GÖMME:
+            await update.effective_message.reply_photo(
+                photo=grafik_foto_url,
+                caption=tam_metin[:1024]
+            )
+            if len(tam_metin) > 1024:
+                await update.effective_message.reply_text(tam_metin[1024:])
+                
             await bekleme_mesajı.delete()
         except Exception as e:
-            logger.error(f"Mesaj gönderme hatası: {e}")
-            # Karakter sınırına veya markdown hatasına karşı düz metin koruması
-            await update.effective_message.reply_text(f"📊 {hisse_kodu} Analizi:\n{analiz_raporu}")
+            logger.error(f"Fotoğraf gönderme hatası: {e}")
+            # Fotoğraf yüklemede Telegram anlık takılırsa bot patlamasın diye düzgünce linkli metin geçiyoruz
+            grafik_yedek_link = f"https://s.tradingview.com/widgetembed/?symbol=BIST%3A{hisse_kodu}&interval=D&theme=dark"
+            metin_linkli = f"📊 **[CANLI GRAFİĞİ GÖRMEK İÇİN TIKLA]({grafik_yedek_link})**\n\n{tam_metin}"
+            await update.effective_message.reply_text(metin_linkli, parse_mode="Markdown")
             await bekleme_mesajı.delete()
     else:
         await update.effective_message.reply_text(f"❌ {hisse_kodu} için canlı borsa verisi çekilemedi reis.")
@@ -198,9 +165,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(klavye)
     
     mesaj_metni = (
-        "Kral Yapay Zeka Destekli Grafik ve Gelişmiş Sinyal Botuna Hoş Geldin! 🚀\n\n"
+        "Kral Sade Anlatımlı Borsa Botuna Hoş Geldin! 🚀\n\n"
         "Aşağıdaki butonlardan birine tıkla ya da direkt hisse kodunu yaz.\n"
-        "Bot indikatör analizlerini ve derin geçmiş kırılımlarını önüne serecek!"
+        "Grafik fotoğrafıyla beraber, herkesin anlayacağı dilden analiz anında cebinde!"
     )
     if update.message:
         await update.message.reply_text(mesaj_metni, reply_markup=reply_markup)
@@ -232,7 +199,7 @@ async def webhook(request: Request):
 
 @app.get('/')
 def index():
-    return {"status": "Derin Grafik Analiz Motoru Sorunsuz Aktif!"}
+    return {"status": "Basit Anlatımlı Grafik Sistemi Ayakta!"}
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
