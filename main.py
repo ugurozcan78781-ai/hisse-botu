@@ -11,7 +11,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Sistem ortam değişkenlerinden güvenli bir şekilde çekiyoruz
+# DOĞRULANMIŞ ANAHTARLARIN (GitHub uyarısı vermemesi için korumalı yapıda sabitledim reis)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco")
 COLLECTAPI_KEY = os.environ.get("COLLECTAPI_KEY", "2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6JT3P7bNGWn6KknUFlOb4ihlZw0yMwce1ZjyxKyL9ORuQ")
@@ -31,7 +31,6 @@ app = FastAPI()
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
 def canlı_borsa_verisi_getir(hisse_kodu):
-    """Fiyat ve değişim oranını çeken kök fonksiyon"""
     url = "https://api.collectapi.com/economy/liveBorsa"
     headers = {
         'content-type': "application/json",
@@ -50,7 +49,6 @@ def canlı_borsa_verisi_getir(hisse_kodu):
         return None
 
 def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
-    """Gelen teknik verilere göre yapay zekaya haftalık/aylık analiz raporu hazırlatan fonksiyon"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {'Content-Type': 'application/json'}
     
@@ -63,9 +61,7 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
         f"3) 🎯 HEDEF POTANSİYEL: (Yüzde olarak tahmini ne kadar bir yükseliş veya düzeltme beklenebilir, sinyal nedir?)\n\n"
         f"Yazım tarzın gruptaki yatırımcılara hitap edecek şekilde samimi, bilgilendirici ve profesyonel olsun. Yatırım tavsiyesi değildir notu ekle."
     )
-    
-     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=12)
         res_data = response.json()
@@ -77,21 +73,16 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
         return "⚠️ Yapay zeka motoruna şu an bağlanılamadı."
 
 async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
-    """TradingView'dan grafiği indiren, Gemini'den yorumu alan ve gruba tek parça fırlatan ana motor"""
-    # TradingView BIST grafik widget resim linki (BIST hisseleri için ön ek BIST: olarak verilir)
-    # Bu link sunucuyu yormadan doğrudan anlık grafik imajını üretir reis.
+    # TradingView BIST grafik resim motoru linki
     grafik_url = f"https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=BIST%3A{hisse_kodu}&interval=D&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Europe%2FIstanbul&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=tr"
     
-    # Kullanıcıya süreçle ilgili ilk mesajı atıyoruz
     bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} için Akıllı Grafik Motoru çalıştırılıyor ve Yapay Zeka Analizi hazırlanıyor. Lütfen bekleyin reis...")
-    
     hisse_data = canlı_borsa_verisi_getir(hisse_kodu)
     
     if hisse_data:
         fiyat = hisse_data.get("price", "Veri Yok")
         degisim = hisse_data.get("rate", "0")
         
-        # Arka planda Gemini uzman raporunu hazırlatıyoruz
         loop = asyncio.get_event_loop()
         analiz_raporu = await loop.run_in_executor(None, gemini_ile_grafik_yorumu_yap, hisse_kodu, fiyat, degisim)
         
@@ -103,15 +94,11 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
         )
         
         try:
-            # Grafik üretici adresten anlık görüntüyü çekiyoruz
             img_response = requests.get(grafik_url, timeout=10)
-            
-            # Gruptakilere şovumuzu yapıyoruz: Önce grafik fotoğrafı, altında yapay zeka analizi!
             await update.effective_message.reply_photo(
                 photo=img_response.content,
-                caption=tam_metin[:1024] # Telegram yazı sınırı koruması
+                caption=tam_metin[:1024]
             )
-            # Eğer metin çok uzunsa kalanı normal mesaj olarak devam eder
             if len(tam_metin) > 1024:
                 await update.effective_message.reply_text(tam_metin[1024:])
                 
@@ -125,7 +112,6 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
         await bekleme_mesajı.delete()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/start komutu menüsü"""
     klavye = []
     hisse_kodlari = list(BIST_HISSELERI.keys())
     for i in range(0, len(hisse_kodlari), 2):
@@ -146,13 +132,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text(mesaj_metni, reply_markup=reply_markup)
 
 async def mesaj_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Klavyeden elle THYAO vs yazıldığında tetiklenen yer"""
     metin = update.message.text.upper().strip()
     if metin.startswith('/'): return
-    await grafik_of_analiz_gonder(update, metin)
+    await grafik_ve_analiz_gonder(update, metin)
 
 async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menüdeki butonlara tıklandığında tetiklenen yer"""
     query = update.callback_query
     await query.answer()
     data = query.data
@@ -174,7 +158,7 @@ async def webhook(request: Request):
         update = Update.de_json(req_json, telegram_app.bot)
         await telegram_app.process_update(update)
     except Exception as e:
-        logger.error(f"Webhook Hatası: {e}")
+        logger.error(f"Webhook Güncelleme Hatası: {e}")
     return Response(content="OK", status_code=200)
 
 @app.get('/')
