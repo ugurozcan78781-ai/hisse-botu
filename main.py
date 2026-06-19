@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 import uvicorn
 import requests
@@ -27,7 +28,23 @@ BIST_HISSELERI = {
     "TUPRS": "Tüpraş"
 }
 
-app = FastAPI()
+# 🎯 CRITICAL FIX: Render'ın sunucuyu kapatmasını engelleyen modern Lifespan yapısı
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Sunucu açılırken botu kararlı şekilde başlat
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CallbackQueryHandler(buton_handler))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_handler))
+    
+    await telegram_app.initialize()
+    await telegram_app.start()
+    logger.info("🚀 Borsa Botu ve Telegram Event Loop başarıyla kilitlendi, aktif!")
+    yield
+    # Sunucu kapanırken temizlik yap
+    await telegram_app.stop()
+    await telegram_app.shutdown()
+
+app = FastAPI(lifespan=lifespan)
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
 def canlı_borsa_verisi_getir(hisse_kodu):
@@ -50,11 +67,9 @@ def canlı_borsa_verisi_getir(hisse_kodu):
         return None
 
 def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
-    # En güncel kararlı API endpoint'i
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     headers = {'Content-Type': 'application/json'}
     
-    # Sinyal, Hedef Fiyat ve Stop seviyelerini zorunlu kılan profesyonel borsa emri (prompt)
     prompt = (
         f"Sen uluslararası sertifikalı bir kıdemli borsa ve teknik analiz uzmanısın. Borsa İstanbul'daki {hisse_kodu} hissesini inceliyorsun.\n"
         f"Hissenin Son Canlı Fiyatı: {fiyat} TL, Günlük Değişim Oranı: %{degisim}.\n\n"
@@ -77,7 +92,7 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
         if "candidates" in res_data and res_data["candidates"]:
             return res_data["candidates"][0]["content"]["parts"][0]["text"]
         
-        # Eğer API anahtarı hala kapalıysa veya hata döndürürse alternatif algoritma çalışsın:
+        # API doğrulanmadıysa matematiksel algoritma çalışmaya devam eder:
         try:
             fiyat_num = float(str(fiyat).replace(",", "."))
             degisim_num = float(str(degisim).replace(",", "."))
@@ -100,7 +115,7 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
             f"🎯 **HEDEF POTANSİYEL:**\n"
             f"- Orta Vadeli Teknik Hedef: **{hedef} TL** (Yaklaşık %+25 potansiyel)\n\n"
             f"⚡ **AKILLI BOT SİNYALİ:** **{sinyal}**\n"
-            "_Nedeni: Hisse anlık momentum dengesinde koridor aralığında hareket ediyor. Destek altı kapanışlara dikkat edilmelidir._\n\n"
+            "Nedeni: Hisse anlık momentum dengesinde koridor aralığında hareket ediyor. Destek altı kapanışlara dikkat edilmelidir.\n\n"
             "Yatırım tavsiyesi değildir."
         )
     except Exception as e:
@@ -110,10 +125,10 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
 async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
     hisse_kodu = hisse_kodu.upper().strip()
     
-    # Canlı grafiği doğrudan Telegram'ın çekmesi için link yapımız
-    grafik_url = f"https://s.tradingview.com/widgetembed/?symbol=BIST%3A{hisse_kodu}&interval=D&theme=dark&style=1&timezone=Europe%2FIstanbul"
+    # 🎯 NEW FIX: Telegram'ın doğrudan resim/fotoğraf olarak chat'e basabileceği resmi snapshot CDN'i
+    grafik_resim_url = f"https://s3.tradingview.com/snapshots/{hisse_kodu.lower()[0]}/{hisse_kodu.lower()}.png"
 
-    bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} için Grafik Ayarlanıyor ve Stratejik Sinyal Analizi Üretiliyor...")
+    bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} için Canlı Grafik Çekiliyor ve Sinyal Analizi Yapılıyor...")
     
     hisse_data = canlı_borsa_verisi_getir(hisse_kodu)
     
@@ -132,22 +147,26 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
         )
         
         try:
-            # Resim olarak göndermeyi deniyoruz
+            # 🎯 RESİM OLARAK BASMA: URL'yi veriyoruz, Telegram resmi sohbet içine doğrudan çiziyor!
             await update.effective_message.reply_photo(
-                photo=grafik_url,
-                caption=tam_metin[:1024],
-                parse_mode="Markdown"
+                photo=grafik_resim_url,
+                caption=tam_metin[:1024]
             )
             if len(tam_metin) > 1024:
-                await update.effective_message.reply_text(tam_metin[1024:], parse_mode="Markdown")
+                await update.effective_message.reply_text(tam_metin[1024:])
                 
             await bekleme_mesajı.delete()
         except Exception as e:
             logger.error(f"Grafik basma hatası: {e}")
-            # Resim linki patlarsa doğrudan tıklanabilir şık link halinde metni pasla
-            linkli_metin = f"📈 **[Hisse Canlı Grafiğini Görmek İçin Buraya Tıkla]({grafik_url})**\n\n" + tam_metin
-            await update.effective_message.reply_text(linkli_metin, parse_mode="Markdown", disable_web_page_preview=False)
-            await bekleme_mesajı.delete()
+            # Eğer anlık snapshot henüz basılmadıysa alternatif yedek resim linki:
+            try:
+                yedek_grafik = f"https://charts2-node.finanzen.net/chart.aspx?code={hisse_kodu}.IS&size=large"
+                await update.effective_message.reply_photo(photo=yedek_grafik, caption=tam_metin[:1024])
+                await bekleme_mesajı.delete()
+            except:
+                # O da olmazsa düz metin geç, patlama
+                await update.effective_message.reply_text(tam_metin)
+                await bekleme_mesajı.delete()
     else:
         await update.effective_message.reply_text(f"❌ {hisse_kodu} için canlı borsa verisi çekilemedi reis.")
         await bekleme_mesajı.delete()
@@ -185,14 +204,6 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hisse_kodu = data.split("_")[1]
         await grafik_ve_analiz_gonder(update, hisse_kodu)
 
-@app.on_event("startup")
-async def startup_event():
-    telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CallbackQueryHandler(buton_handler))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_handler))
-    await telegram_app.initialize()
-    await telegram_app.start()
-
 @app.post('/webhook')
 async def webhook(request: Request):
     try:
@@ -205,7 +216,7 @@ async def webhook(request: Request):
 
 @app.get('/')
 def index():
-    return {"status": "Sinyal ve Strateji Motoru Aktif!"}
+    return {"status": "Grafik ve Lifespan Sinyal Sistemi Kesintisiz Ayakta!"}
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
