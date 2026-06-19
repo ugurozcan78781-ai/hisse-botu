@@ -12,7 +12,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# SENİN DOĞRULANMIŞ ANAHTARLARIN
+# DOĞRULANMIŞ ANAHTARLARIN
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco")
 COLLECTAPI_KEY = os.environ.get("COLLECTAPI_KEY", "2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6LEL8Xzbc9DxJvTmY0AEPsR6T4N_8FCQ6p6YDE3eu3SrA")
@@ -31,7 +31,7 @@ BIST_HISSELERI = {
 # 🎯 CRITICAL FIX: Render'ın sunucuyu kapatmasını engelleyen modern Lifespan yapısı
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Sunucu açılırken botu kararlı şekilde başlat
+    # Sunucu açılırken botu kararlı şekilde başlatıyoruz
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CallbackQueryHandler(buton_handler))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_handler))
@@ -92,7 +92,7 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
         if "candidates" in res_data and res_data["candidates"]:
             return res_data["candidates"][0]["content"]["parts"][0]["text"]
         
-        # API doğrulanmadıysa matematiksel algoritma çalışmaya devam eder:
+        # API doğrulanmadıysa senin o çok sevdiğin matematiksel algoritma devrede kalır:
         try:
             fiyat_num = float(str(fiyat).replace(",", "."))
             degisim_num = float(str(degisim).replace(",", "."))
@@ -125,7 +125,7 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
 async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
     hisse_kodu = hisse_kodu.upper().strip()
     
-    # 🎯 NEW FIX: Telegram'ın doğrudan resim/fotoğraf olarak chat'e basabileceği resmi snapshot CDN'i
+    # 🎯 KESİN RESİM ÇÖZÜMÜ: Telegram'ın doğrudan fotoğraf olarak basabileceği TradingView grafik snapshot motoru
     grafik_resim_url = f"https://s3.tradingview.com/snapshots/{hisse_kodu.lower()[0]}/{hisse_kodu.lower()}.png"
 
     bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} için Canlı Grafik Çekiliyor ve Sinyal Analizi Yapılıyor...")
@@ -147,7 +147,7 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
         )
         
         try:
-            # 🎯 RESİM OLARAK BASMA: URL'yi veriyoruz, Telegram resmi sohbet içine doğrudan çiziyor!
+            # URL'yi veriyoruz, Telegram resmi sohbet içine doğrudan fotoğraf olarak gömüyor reis!
             await update.effective_message.reply_photo(
                 photo=grafik_resim_url,
                 caption=tam_metin[:1024]
@@ -158,13 +158,13 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
             await bekleme_mesajı.delete()
         except Exception as e:
             logger.error(f"Grafik basma hatası: {e}")
-            # Eğer anlık snapshot henüz basılmadıysa alternatif yedek resim linki:
+            # Eğer o anlık snapshot henüz oluşmadıysa yedek dinamik grafik motorunu devreye alıyoruz:
             try:
                 yedek_grafik = f"https://charts2-node.finanzen.net/chart.aspx?code={hisse_kodu}.IS&size=large"
                 await update.effective_message.reply_photo(photo=yedek_grafik, caption=tam_metin[:1024])
                 await bekleme_mesajı.delete()
             except:
-                # O da olmazsa düz metin geç, patlama
+                # O da olmazsa düz metin geç, bot kilitlenmesin
                 await update.effective_message.reply_text(tam_metin)
                 await bekleme_mesajı.delete()
     else:
@@ -216,7 +216,7 @@ async def webhook(request: Request):
 
 @app.get('/')
 def index():
-    return {"status": "Grafik ve Lifespan Sinyal Sistemi Kesintisiz Ayakta!"}
+    return {"status": "Lifespan ve Resimli Grafik Sistemi Kesintisiz Aktif!"}
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
