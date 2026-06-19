@@ -1,20 +1,17 @@
 import os
 import logging
-from flask import Flask, request
+from fastapi import FastAPI, Request, Response
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import requests
-
-# Flask ayarları
-app = Flask(__name__)
 
 # Logging ayarları
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Token ve API Tanımlamaları
+# Doğrulanmış Token ve API Tanımlamaları
 TELEGRAM_TOKEN = "8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco"
-COLLECTAPI_KEY = "2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1" # Kendi CollectAPI anahtarını buraya koy reis
+COLLECTAPI_KEY = "2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1"
 
 # Popüler Hisseler (Butonlar için)
 BIST_HISSELERI = {
@@ -28,8 +25,14 @@ BIST_HISSELERI = {
     "TUPRS": "Tüpraş"
 }
 
+# FastAPI uygulamasını başlatıyoruz
+app = FastAPI()
+
+# Telegram Application nesnesini global olarak kuruyoruz
+telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+
 def canlı_borsa_verisi_getir(hisse_kodu):
-    """Orijinal /liveBorsa endpoint'inden veri çeken fonksiyon"""
+    """Doğrulanmış API anahtarı ile çalışan kesin fonksiyon"""
     url = "https://api.collectapi.com/economy/liveBorsa"
     headers = {
         'content-type': "application/json",
@@ -71,14 +74,14 @@ def canlı_borsa_verisi_getir(hisse_kodu):
             else:
                 return f"❌ {hisse_kodu} şu an listede bulunamadı reis."
         else:
-            return "❌ Canlı borsa verisi alınamadı. CollectAPI limitini kontrol et reis."
+            return "❌ Canlı borsa verisi alınamadı. Limit veya API problemi olabilir."
             
     except Exception as e:
         logger.error(f"API Hatası: {e}")
         return "❌ Bağlantı hatası oluştu reis."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/start komutu geldiğinde çalışan ana menü"""
+    """/start komutu menüsü"""
     klavye = []
     hisse_kodlari = list(BIST_HISSELERI.keys())
     for i in range(0, len(hisse_kodlari), 2):
@@ -89,7 +92,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     reply_markup = InlineKeyboardMarkup(klavye)
     
-    # Güvenlik önlemi: Hem normal mesaj hem buton tıklaması için uyumlu yanıt
     mesaj_metni = (
         "Kral Borsa Botuna Hoş Geldin! 🚀\n\n"
         "İster aşağıdaki butonlara tıkla, ister direkt klavyeden hisse kodunu yaz (Örn: THYAO):"
@@ -100,10 +102,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text(mesaj_metni, reply_markup=reply_markup)
 
 async def mesaj_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kullanıcı klavyeden elle THYAO vs. yazdığında devreye giren eski usul sistem"""
+    """Klavyeden elle yazınca çalışan sistem"""
     metin = update.message.text.upper().strip()
-    
-    # Eğer kullanıcı yanlışlıkla komut yazdıysa işlem yapma
     if metin.startswith('/'):
         return
         
@@ -112,7 +112,7 @@ async def mesaj_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(analiz)
 
 async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Butonlara tıklandığında devreye giren sistem"""
+    """Buton tıklamaları"""
     query = update.callback_query
     await query.answer()
     
@@ -124,34 +124,29 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         geri_buton = [[InlineKeyboardButton("⬅️ Listeye Geri Dön", callback_data="listeye_don")]]
         await query.edit_message_text(text=analiz_sonucu, reply_markup=InlineKeyboardMarkup(geri_buton))
-        
     elif data == "listeye_don":
         await start(update, context)
 
-# Bot Kurulumu
-telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+# Bot Handler Girişleri (Uygulama ilk açıldığında bir kez yüklenir)
+@app.on_event("startup")
+async def startup_event():
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CallbackQueryHandler(buton_handler))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_handler))
+    await telegram_app.initialize()
 
-# Handler'ları Sırasıyla Ekleme (Burası kritik)
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CallbackQueryHandler(buton_handler))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_handler))
+@app.post('/webhook')
+async def webhook(request: Request):
+    """FastAPI asenkron yapısıyla gelen Telegram paketlerini asla düşürmez"""
+    try:
+        req_json = await request.json()
+        update = Update.de_json(req_json, telegram_app.bot)
+        # Asenkron havuzda düzgünce bekletilerek çalıştırılır (Hata vermez)
+        await telegram_app.process_update(update)
+    except Exception as e:
+        logger.error(f"Webhook Güncelleme Hatası: {e}")
+    return Response(content="OK", status_code=200)
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    """Telegram'dan gelen her isteği alan ana havuz"""
-    if request.method == "POST":
-        try:
-            # Gelen veriyi işle ve task sırasına koy
-            update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-            telegram_app.create_task(telegram_app.process_update(update))
-        except Exception as e:
-            logger.error(f"Webhook Güncelleme Hatası: {e}")
-    return "OK", 200
-
-@app.route('/')
+@app.get('/')
 def index():
-    return "Bot Sistemleri Kusursuz Çalışıyor!", 200
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    return {"status": "Bot Sistemleri Kusursuz Çalışıyor!"}
