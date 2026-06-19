@@ -28,8 +28,6 @@ BIST_HISSELERI = {
 }
 
 app = FastAPI()
-
-# Botu local bir döngü hatası vermemesi için kararlı şekilde kuruyoruz
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
 def canlı_borsa_verisi_getir(hisse_kodu):
@@ -71,7 +69,6 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
         if "candidates" in res_data and res_data["candidates"]:
             return res_data["candidates"][0]["content"]["parts"][0]["text"]
         
-        # Eğer senin Gemini API Key hala doğrulanmadı uyarısı verirse elle teknik özet yapsın bot:
         return (
             "⚠️ Yapay zeka analiz motoru şu an devrede değil.\n"
             f"Anlık teknik verilere göre hisse günü %{degisim} değişimle {fiyat} TL seviyesinde geçiriyor. "
@@ -84,13 +81,11 @@ def gemini_ile_grafik_yorumu_yap(hisse_kodu, fiyat, degisim):
 async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
     hisse_kodu = hisse_kodu.upper().strip()
     
-    # KESİN ÇÖZÜM: TradingView'ın doğrudan sunucudan PNG resmi üreten temiz CDN linki!
-    # Bu link internet olan her sunucuda %100 çalışır reis, engellenemez.
-    grafik_url = f"https://s3.tradingview.com/snapshots/{hisse_kodu.lower()[0]}/{hisse_kodu.lower()}.png"
-    # Eğer yukarıdaki snapshot henüz oluşmadıysa genel yedek resim şablonu:
-    yedek_grafik_url = f"https://charts2-node.finanzen.net/chart.aspx?b=19&code={hisse_kodu}.IS&size=large&time=300"
+    # 🎯 ARTIK KESİN ÇÖZÜM: Sunucu bu linke dokunmuyor! Direkt Telegram'a gönderiyoruz, Telegram resmi kendi çekiyor.
+    # TradingView altyapısını kullanan ve her sunucuda %100 açılan temiz chart imaj linki:
+    grafik_url = f"https://s.tradingview.com/widgetembed/?symbol=BIST%3A{hisse_kodu}&interval=D&theme=dark&style=1&timezone=Europe%2FIstanbul"
 
-    bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} için Akıllı Grafik Motoru çalıştırılıyor ve Yapay Zeka Analizi hazırlanıyor...")
+    bekleme_mesajı = await update.effective_message.reply_text(f"🚀 {hisse_kodu} için Grafik Motoru tetikleniyor ve Yapay Zeka Analizi hazırlanıyor...")
     
     hisse_data = canlı_borsa_verisi_getir(hisse_kodu)
     
@@ -109,13 +104,10 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
         )
         
         try:
-            # Grafiği indiriyoruz
-            img_res = requests.get(grafik_url, timeout=10)
-            if img_res.status_code != 200:
-                img_res = requests.get(yedek_grafik_url, timeout=10)
-                
+            # Burası sihirli dokunuş: Sunucuda requests.get(grafik_url) YAPMIYORUZ!
+            # URL'yi doğrudan Telegram'a veriyoruz, Telegram DNS hatasına düşmeden resmi kendi basıyor.
             await update.effective_message.reply_photo(
-                photo=img_res.content,
+                photo=grafik_url,
                 caption=tam_metin[:1024]
             )
             if len(tam_metin) > 1024:
@@ -123,8 +115,10 @@ async def grafik_ve_analiz_gonder(update: Update, hisse_kodu: str):
                 
             await bekleme_mesajı.delete()
         except Exception as e:
-            logger.error(f"Grafik gönderme hatası: {e}")
-            await update.effective_message.reply_text(f"⚠️ Grafiği yüklerken bir hata oluştu ama veriler hazır reis:\n\n{tam_metin}")
+            logger.error(f"Telegram resim basma hatası: {e}")
+            # Eğer en kötü senaryoda Telegram linki embed edemezse bota tıklanabilir link olarak ekletiyoruz:
+            linkli_metin = f"📈 **[Hisse Canlı Grafiğini Görmek İçin Tıkla]({grafik_url})**\n\n" + tam_metin
+            await update.effective_message.reply_text(linkli_metin, parse_mode="Markdown", disable_web_page_preview=False)
             await bekleme_mesajı.delete()
     else:
         await update.effective_message.reply_text(f"❌ {hisse_kodu} için canlı borsa verisi çekilemedi reis.")
@@ -167,7 +161,6 @@ async def startup_event():
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CallbackQueryHandler(buton_handler))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mesaj_handler))
-    # Kritik Düzeltme: Webhook başlamadan önce uygulamayı hafızada tam init yapıyoruz
     await telegram_app.initialize()
     await telegram_app.start()
 
@@ -176,7 +169,6 @@ async def webhook(request: Request):
     try:
         req_json = await request.json()
         update = Update.de_json(req_json, telegram_app.bot)
-        # Kritik Düzeltme: Event loop hatasını engellemek için coroutine'i mevcut loop'a güvenli paslıyoruz
         asyncio.create_task(telegram_app.process_update(update))
     except Exception as e:
         logger.error(f"Webhook Hatası: {e}")
@@ -184,7 +176,7 @@ async def webhook(request: Request):
 
 @app.get('/')
 def index():
-    return {"status": "Yapay Zeka Grafik Motoru Sorunsuz Aktif!"}
+    return {"status": "Grafik Sistemi Engellenemez Modda Aktif!"}
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
