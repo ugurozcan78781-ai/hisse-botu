@@ -4,13 +4,18 @@ from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Senin sisteminde kayıtlı olan güncel API anahtarların kral
-TOKEN = "7294816355:AAH_Q8x9mZ2yL-4k9vB7cN3xP1oR8sT2uVw"
-GEMINI_API_KEY = "AIzaSyBl4K_9vX8zW2p1nM7qL5kB3xN1oR9sT2u"
-COLLECTAPI_KEY = "apikey 3nK8vX9zL2p1mQ7rB5k:6mN1oR9sT2uVw8xZ3yL4k"
+# Anahtarları Render panelindeki Environment Variables'tan otomatik çeker
+TOKEN = os.getenv("8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco")
+GEMINI_API_KEY = os.getenv("AQ.Ab8RN6LkKVK-NS4kEn4ky9flnCiduaa5XzivwT7q5YWaASqWUg")
+COLLECTAPI_KEY = os.getenv("apikey 2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1")
 
 bot = Bot(token=TOKEN)
 app = FastAPI()
+
+# Render ana sayfa kontrolü (404 hatası vermemesi için ekledim)
+@app.get("/")
+async def root():
+    return {"status": "Bot calisiyor kral, sistem ayakta"}
 
 # 1. Veri Çekme Motoru
 def get_hisse_data(hisse_kod):
@@ -21,16 +26,16 @@ def get_hisse_data(hisse_kod):
     }
     try:
         response = requests.get(url, headers=headers).json()
-        if response.get("success") and response.get("result"):
+        if response.get("success") and response.get("result") and len(response["result"]) > 0:
             data = response["result"][0]
             return {
                 "fiyat": data.get("price", "Bilinmiyor"),
-                "hacim": data.get("hacim", "Yüksek"),
-                "rsi": "62 (Nötr/Pozitif)",
-                "ema50": "Trend Üstünde"
+                "hacim": data.get("hacim", "Yuksek"),
+                "rsi": "62 (Notr/Pozitif)",
+                "ema50": "Trend Ustunde"
             }
     except Exception as e:
-        print(f"Veri çekme hatası: {e}")
+        print(f"Veri cekme hatasi: {e}")
     return None
 
 # 2. Yapay Zeka Analiz Motoru
@@ -38,10 +43,10 @@ def ai_teknik_analiz(hisse_kod, data):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
     
     prompt = (
-        f"Sen profesyonel bir borsa uzmanısın. Yapay zeka jargonu kullanmadan, "
-        f"tamamen samimi ve net bir dille konuş. {hisse_kod} hissesinin verileri şunlar:\n"
-        f"Canlı Fiyat: {data['fiyat']}\nHacim Durumu: {data['hacim']}\nRSI Değeri: {data['rsi']}\nEMA 50 Durumu: {data['ema50']}\n"
-        f"Bu verilere bakarak yönü yorumla, kesin rakamlar vererek Destek, Direnç ve Stop seviyelerini yaz."
+        f"Sen profesyonel bir borsa uzmanisin. Yapay zeka jargonu kullanmadan, "
+        f"tamamen samimi ve net bir dille konus. {hisse_kod} hissesinin verileri sunlar:\n"
+        f"Canli Fiyat: {data['fiyat']}\nHacim Durumu: {data['hacim']}\nRSI Degeri: {data['rsi']}\nEMA 50 Durumu: {data['ema50']}\n"
+        f"Bu verilere bakarak yonu yorumla, kesin rakamlar vererek Destek, Direnc ve Stop seviyelerini yaz."
     )
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -49,11 +54,11 @@ def ai_teknik_analiz(hisse_kod, data):
         res = requests.post(url, json=payload).json()
         return res['candidates'][0]['content']['parts'][0]['text']
     except:
-        return "Analiz motorunda kısa süreli bir yoğunluk var reis, az sonra tekrar dene."
+        return "Analiz motorunda kisa sureli bir yogunluk var reis, az sonra tekrar dene."
 
 # 3. Komut Fonksiyonları
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Kral hoş geldin! Analiz etmek istediğin hisse kodunu yazman yeterli. (Örn: THYAO)")
+    await update.message.reply_text("Kral hos geldin! Analiz etmek istedigin hisse kodunu yazman yeterli. (Orn: THYAO)")
 
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
@@ -61,17 +66,17 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if hisse_kod.startswith("/"):
         return
 
-    bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} için canlı veriler toplanıyor...")
+    bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} icin canli veriler toplaniyor...")
     
     hisse_verisi = get_hisse_data(hisse_kod)
     if not hisse_verisi:
-        await bekleniyor_mesajı.edit_text("Hisse kodu bulunamadı veya API bağlantısı kurulamadı kral.")
+        await bekleniyor_mesajı.edit_text("Hisse kodu bulunamadi veya API baglantisi kurulamadi kral.")
         return
         
     analiz_sonucu = ai_teknik_analiz(hisse_kod, hisse_verisi)
     await bekleniyor_mesajı.edit_text(analiz_sonucu)
 
-# 4. Webhook Alanı
+# 4. Webhook Alani
 @app.post("/webhook")
 async def webhook(request: Request):
     json_data = await request.json()
