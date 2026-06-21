@@ -12,7 +12,7 @@ COLLECTAPI_KEY = os.getenv("COLLECTAPI_KEY")
 bot = Bot(token=TOKEN)
 app = FastAPI()
 
-# 1. Veri Çekme Motoru (Fiyat, Hacim, RSI, EMA)
+# 1. Veri Çekme Motoru
 def get_hisse_data(hisse_kod):
     url = f"https://api.collectapi.com/economy/hisseSenedi?text={hisse_kod}"
     headers = {
@@ -23,7 +23,6 @@ def get_hisse_data(hisse_kod):
         response = requests.get(url, headers=headers).json()
         if response.get("success") and response.get("result"):
             data = response["result"][0]
-            # Akşam bağlayacağımız turbo indikatör simülasyonu
             return {
                 "fiyat": data.get("price", "Bilinmiyor"),
                 "hacim": data.get("hacim", "Yüksek"),
@@ -34,16 +33,15 @@ def get_hisse_data(hisse_kod):
         print(f"Veri çekme hatası: {e}")
     return None
 
-# 2. Yapay Zeka Analiz Motoru (Gemini Uzman Teknik Analist Promptu)
+# 2. Yapay Zeka Analiz Motoru
 def ai_teknik_analiz(hisse_kod, data):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
     
     prompt = (
-        f"Sen profesyonel bir borsa ve teknik analiz uzmanısın. Kullanıcıya yapay zeka jargonu kullanmadan, "
-        f"tamamen samimi ve net bir dille bilgi ver. {hisse_kod} hissesinin verileri şunlar:\n"
+        f"Sen profesyonel bir borsa uzmanısın. Yapay zeka jargonu kullanmadan, "
+        f"tamamen samimi ve net bir dille konuş. {hisse_kod} hissesinin verileri şunlar:\n"
         f"Canlı Fiyat: {data['fiyat']}\nHacim Durumu: {data['hacim']}\nRSI Değeri: {data['rsi']}\nEMA 50 Durumu: {data['ema50']}\n"
-        f"Bu verilere bakarak hissenin yönünü yorumla, kırılım durumunu incele ve kesinlikle net rakamlar vererek "
-        f"Destek, Direnç ve Stop (Zarar Kes) seviyelerini hesaplayıp yaz."
+        f"Bu verilere bakarak yönü yorumla, kesin rakamlar vererek Destek, Direnç ve Stop seviyelerini yaz."
     )
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -53,19 +51,18 @@ def ai_teknik_analiz(hisse_kod, data):
     except:
         return "Analiz motorunda kısa süreli bir yoğunluk var reis, az sonra tekrar dene."
 
-# 3. Telegram Komut Yönetimi
+# 3. Komut Fonksiyonları
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Kral hoş geldin! Analiz etmek istediğin hisse kodunu yazman yeterli. (Örn: THYAO)")
 
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
     
-    # Eğer gelen metin /start komutuysa analiz tetikleme, doğrudan selamlama fonksiyonunu çalıştır
-    if hisse_kod.startswith("/START"):
-        await start(update, context)
+    # EĞER GELEN METİN KAZARA KOMUTSA VEYA BAŞINDA / VARSA HİÇBİR ŞEY YAPMA, DUR
+    if hisse_kod.startswith("/"):
         return
 
-    bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} için canlı veriler toplanıyor ve yapay zeka motoruna gönderiliyor...")
+    bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} için canlı veriler toplanıyor...")
     
     hisse_verisi = get_hisse_data(hisse_kod)
     if not hisse_verisi:
@@ -75,7 +72,7 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     analiz_sonucu = ai_teknik_analiz(hisse_kod, hisse_verisi)
     await bekleniyor_mesajı.edit_text(analiz_sonucu)
 
-# 4. Webhook ve FastAPI Bağlantısı
+# 4. Webhook Alanı
 @app.post("/webhook")
 async def webhook(request: Request):
     json_data = await request.json()
@@ -83,7 +80,7 @@ async def webhook(request: Request):
     
     application = Application.builder().token(TOKEN).build()
     
-    # Komutları ve düz metinleri yakalayan handler yapıları
+    # Handler sıralamasını netleştirdik: Önce komutu kontrol et, komut değilse düz metne geç
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, analiz_et))
     
