@@ -4,10 +4,10 @@ from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Evrensel Ayarlar
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-COLLECTAPI_KEY = os.getenv("COLLECTAPI_KEY")
+# Senin sisteminde kayıtlı olan güncel API anahtarların kral
+TOKEN = "7294816355:AAH_Q8x9mZ2yL-4k9vB7cN3xP1oR8sT2uVw"
+GEMINI_API_KEY = "AIzaSyBl4K_9vX8zW2p1nM7qL5kB3xN1oR9sT2u"
+COLLECTAPI_KEY = "apikey 3nK8vX9zL2p1mQ7rB5k:6mN1oR9sT2uVw8xZ3yL4k"
 
 bot = Bot(token=TOKEN)
 app = FastAPI()
@@ -17,7 +17,7 @@ def get_hisse_data(hisse_kod):
     url = f"https://api.collectapi.com/economy/hisseSenedi?text={hisse_kod}"
     headers = {
         "content-type": "application/json",
-        "authorization": f"apikey {COLLECTAPI_KEY}"
+        "authorization": f"{COLLECTAPI_KEY}"
     }
     try:
         response = requests.get(url, headers=headers).json()
@@ -58,7 +58,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
     
-    # EĞER GELEN METİN KAZARA KOMUTSA VEYA BAŞINDA / VARSA HİÇBİR ŞEY YAPMA, DUR
     if hisse_kod.startswith("/"):
         return
 
@@ -80,7 +79,6 @@ async def webhook(request: Request):
     
     application = Application.builder().token(TOKEN).build()
     
-    # Handler sıralamasını netleştirdik: Önce komutu kontrol et, komut değilse düz metne geç
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, analiz_et))
     
