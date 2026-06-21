@@ -2,7 +2,8 @@ import os
 import requests
 from fastapi import FastAPI, Request
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
 
 # Evrensel Ayarlar
 TOKEN = os.getenv("TELEGRAM_TOKEN")
