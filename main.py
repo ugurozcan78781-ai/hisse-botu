@@ -4,11 +4,10 @@ from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-
 # Evrensel Ayarlar
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-COLLECTAPI_KEY = os.getenv("COLLECTAPI_KEY") # Akşam ekleyeceğimiz indikatörler için API key
+COLLECTAPI_KEY = os.getenv("COLLECTAPI_KEY")
 
 bot = Bot(token=TOKEN)
 app = FastAPI()
@@ -60,6 +59,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
+    
+    # Eğer gelen metin /start komutuysa analiz tetikleme, doğrudan selamlama fonksiyonunu çalıştır
+    if hisse_kod.startswith("/START"):
+        await start(update, context)
+        return
+
     bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} için canlı veriler toplanıyor ve yapay zeka motoruna gönderiliyor...")
     
     hisse_verisi = get_hisse_data(hisse_kod)
@@ -76,10 +81,10 @@ async def webhook(request: Request):
     json_data = await request.json()
     update = Update.de_json(json_data, bot)
     
-    # Telegram uygulamasını ayağa kaldırıp komutları işletiyoruz
     application = Application.builder().token(TOKEN).build()
+    
+    # Komutları ve düz metinleri yakalayan handler yapıları
     application.add_handler(CommandHandler("start", start))
-    # Komut olmayan her düz metni hisse kodu olarak algıla
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, analiz_et))
     
     await application.initialize()
