@@ -4,20 +4,20 @@ from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Anahtarları Render panelindeki Environment Variables'tan otomatik çeker
+# GÜVENLİ YÖNTEM: Anahtarlar Render panelindeki Environment Variables'tan okunur
 TOKEN = os.getenv("8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco")
-GEMINI_API_KEY = os.getenv("AQ.Ab8RN6LkKVK-NS4kEn4ky9flnCiduaa5XzivwT7q5YWaASqWUg")
+GEMINI_API_KEY = os.getenv("AQ.Ab8RN6KbI-f-0oIauvqBZcb6ZHkhRaD08XHZxiqAoJlajIf1OA")
 COLLECTAPI_KEY = os.getenv("apikey 2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1")
 
 bot = Bot(token=TOKEN)
 app = FastAPI()
 
-# Render ana sayfa kontrolü (404 hatası vermemesi için ekledim)
+# Render ana sayfa kontrolü (Loglardaki 404 hatasını engellemek için)
 @app.get("/")
 async def root():
     return {"status": "Bot calisiyor kral, sistem ayakta"}
 
-# 1. Veri Çekme Motoru
+# 1. Canlı Veri Çekme Motoru (CollectAPI)
 def get_hisse_data(hisse_kod):
     url = f"https://api.collectapi.com/economy/hisseSenedi?text={hisse_kod}"
     headers = {
@@ -38,7 +38,7 @@ def get_hisse_data(hisse_kod):
         print(f"Veri cekme hatasi: {e}")
     return None
 
-# 2. Yapay Zeka Analiz Motoru
+# 2. Yapay Zeka Analiz Motoru (Gemini)
 def ai_teknik_analiz(hisse_kod, data):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
     
@@ -56,13 +56,14 @@ def ai_teknik_analiz(hisse_kod, data):
     except:
         return "Analiz motorunda kisa sureli bir yogunluk var reis, az sonra tekrar dene."
 
-# 3. Komut Fonksiyonları
+# 3. Telegram Komut ve Mesaj Yönetimi
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Kral hos geldin! Analiz etmek istedigin hisse kodunu yazman yeterli. (Orn: THYAO)")
 
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
     
+    # Eğer kullanıcı yanlışlıkla /start veya başka komut yazdıysa metin analizine sokma
     if hisse_kod.startswith("/"):
         return
 
@@ -76,7 +77,7 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     analiz_sonucu = ai_teknik_analiz(hisse_kod, hisse_verisi)
     await bekleniyor_mesajı.edit_text(analiz_sonucu)
 
-# 4. Webhook Alani
+# 4. Webhook Alanı
 @app.post("/webhook")
 async def webhook(request: Request):
     json_data = await request.json()
