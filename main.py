@@ -4,10 +4,14 @@ from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# KRAL: Gönderdiğin orijinal anahtarlar tam yerlerine çakıldı
+# KRAL: Telegram ve Canlı Veri Anahtarların Sabit
 TOKEN = "8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco"
 COLLECTAPI_KEY = "apikey 2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1"
-GEMINI_API_KEY = "AIzaSyBl4K_9vX8zW2p1nM7qL5kB3xN1oR9sT2u"  # Sistemdeki orijinal Gemini keyin
+
+# YENİ YAPAY ZEKA AYARLARI (Örn: DeepSeek, Groq veya OpenAI)
+AI_API_KEY = "sk-f5af708c6ddf41d2ba7c0f15cd4410f5"
+AI_BASE_URL = "https://api.deepseek.com/v1"  # Hangi servisi kullanacaksan onun base URL'i
+AI_MODEL_NAME = "deepseek-chat"              # Kullanacağın modelin adı
 
 bot = Bot(token=TOKEN)
 app = FastAPI()
@@ -38,9 +42,13 @@ def get_hisse_data(hisse_kod):
         print(f"Veri cekme hatasi: {e}")
     return None
 
-# 2. Yapay Zeka Analiz Motoru (Gemini - En Güncel Hızlı Sürüm)
+# 2. Yeni Yapay Zeka Analiz Motoru (Gelişmiş OpenAI/DeepSeek Standart Yapısı)
 def ai_teknik_analiz(hisse_kod, data):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"{AI_BASE_URL}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {AI_API_KEY}"
+    }
     
     prompt = (
         f"Sen profesyonel bir borsa uzmanisin. Yapay zeka jargonu kullanmadan, "
@@ -49,13 +57,21 @@ def ai_teknik_analiz(hisse_kod, data):
         f"Bu verilere bakarak yonu yorumla, kesin rakamlar vererek Destek, Direnc ve Stop seviyelerini yaz."
     )
     
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    payload = {
+        "model": AI_MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": "Sen samimi bir borsa analiz asistanisin."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7
+    }
+    
     try:
-        res = requests.post(url, json=payload).json()
-        return res['candidates'][0]['content']['parts'][0]['text']
+        res = requests.post(url, json=payload, headers=headers).json()
+        return res['choices'][0]['message']['content']
     except Exception as e:
-        print(f"Gemini Hata Detayi: {e}")
-        return "Analiz motorunda kisa sureli bir yogunluk var reis, az sonra tekrar dene."
+        print(f"Yapay Zeka API Hatasi: {e}")
+        return "Yeni analiz motorunda baglanti hatasi var kral, keyleri veya URL'i kontrol et."
 
 # 3. Telegram Komut ve Mesaj Yönetimi
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -77,7 +93,7 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     analiz_sonucu = ai_teknik_analiz(hisse_kod, hisse_verisi)
     await bekleniyor_mesajı.edit_text(analiz_sonucu)
 
-# 4. Webhook Giriş Noktası (Parantez Hatası Tamamen Düzeltildi)
+# 4. Webhook Giriş Noktası
 @app.post("/webhook")
 async def webhook(request: Request):
     json_data = await request.json()
