@@ -4,15 +4,15 @@ from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# KRAL: Bütün orijinal anahtarların tek bir yerde, eksiksiz toplandı
+# KRAL: Gönderdiğin orijinal anahtarlar tam yerlerine çakıldı
 TOKEN = "8295190923:AAFnBfgcKDsNxQ1N6k0wGgU_5eeFa9gIoco"
 COLLECTAPI_KEY = "apikey 2GxAMb1niIywZeLVxh0GJ0:7if8NdM3bamD0rYMme2ZW1"
-GEMINI_API_KEY = "AIzaSyBl4K_9vX8zW2p1nM7qL5kB3xN1oR9sT2u"  # Senin sistemindeki orijinal Gemini keyin
+GEMINI_API_KEY = "AIzaSyBl4K_9vX8zW2p1nM7qL5kB3xN1oR9sT2u"  # Sistemdeki orijinal Gemini keyin
 
 bot = Bot(token=TOKEN)
 app = FastAPI()
 
-# Render ana sayfa kontrolü (Loglardaki 404 hatasını tamamen keser)
+# Render ana sayfa kontrolü (404 hatasını tamamen keser)
 @app.get("/")
 async def root():
     return {"status": "Bot calisiyor kral, sistem ayakta"}
@@ -52,10 +52,9 @@ def ai_teknik_analiz(hisse_kod, data):
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         res = requests.post(url, json=payload).json()
-        # Yeni model yapısına uygun text çekme alanı
         return res['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
-        print(f"Gemini Analiz Hatasi: {e}")
+        print(f"Gemini Hata Detayi: {e}")
         return "Analiz motorunda kisa sureli bir yogunluk var reis, az sonra tekrar dene."
 
 # 3. Telegram Komut ve Mesaj Yönetimi
@@ -65,7 +64,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
     
-    # Komutların metin analizine girip sistemi bozmasını engelliyoruz
     if hisse_kod.startswith("/"):
         return
 
@@ -79,7 +77,7 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     analiz_sonucu = ai_teknik_analiz(hisse_kod, hisse_verisi)
     await bekleniyor_mesajı.edit_text(analiz_sonucu)
 
-# 4. Webhook Giriş Noktası
+# 4. Webhook Giriş Noktası (Parantez Hatası Tamamen Düzeltildi)
 @app.post("/webhook")
 async def webhook(request: Request):
     json_data = await request.json()
@@ -91,4 +89,5 @@ async def webhook(request: Request):
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, analiz_et))
     
     await application.initialize()
-    await application.process_update(
+    await application.process_update(update)
+    return {"status": "ok"}
