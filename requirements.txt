@@ -2,4 +2,4 @@ fastapi
 uvicorn
 requests
 python-telegram-bot
-yfinance
+beautifulsoup4
