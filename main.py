@@ -18,7 +18,7 @@ app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "Zirhli Seans Motoru Aktif"}
+    return {"status": "User-Agent Zirhli Motor Aktif"}
 
 def clean_float(val_str):
     if not val_str:
@@ -62,6 +62,9 @@ def get_bist_collectapi(hisse_kod):
     req = urllib.request.Request(url)
     req.add_header("content-type", "application/json")
     req.add_header("authorization", COLLECTAPI_AUTH)
+    
+    # 403 FORBIDDEN HATASINI YOK EDEN KRİTİK ADIM: Kendimizi Chrome tarayicisi olarak tanitiyoruz
+    req.add_header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
