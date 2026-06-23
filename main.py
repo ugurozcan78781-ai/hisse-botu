@@ -1,6 +1,7 @@
 import os
 import json
 import urllib.request
+import re
 from fastapi import FastAPI, Request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -10,7 +11,6 @@ OPENROUTER_API_KEY = "sk-or-v1-37800601ba1ce2f5049c7c1fb36427cddbc18430bf17a80fd
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL = "meta-llama/llama-3-8b-instruct:free"
 
-# Kral, verdigin tam metni dogrudan buraya caktim, fonksiyon icinde artik ekleme yapmiyor
 COLLECTAPI_AUTH = "apikey 6iQGP4wHtJei6Whu1uYlFo:2TPdl2Zd8ECbhz0p9slND8"
 
 bot = Bot(token=TOKEN)
@@ -18,7 +18,31 @@ app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "CollectAPI Dogrulanmis Motor Aktif"}
+    return {"status": "CollectAPI Guncel Seans Motoru Aktif"}
+
+def clean_float(val_str):
+    if not val_str:
+        return 0.0
+    val_str = str(val_str).strip()
+    if "," in val_str and "." not in val_str:
+        val_str = val_str.replace(",", ".")
+    try:
+        if "." in val_str:
+            parts = val_str.split(".")
+            kurus = parts[-1]
+            tam_kisim = "".join(parts[:-1]).replace(",", "").replace("-", "")
+            final_str = f"{tam_kisim}.{kurus}"
+            if "-" in val_str:
+                final_str = f"-{final_str}"
+            return float(final_str)
+        else:
+            cleaned = re.sub(r'[^\d\-]', '', val_str)
+            return float(cleaned) if cleaned else 0.0
+    except:
+        try:
+            return float(val_str)
+        except:
+            return 0.0
 
 def format_hacim(hacim_val):
     try:
@@ -37,38 +61,40 @@ def get_bist_collectapi(hisse_kod):
     
     req = urllib.request.Request(url)
     req.add_header("content-type", "application/json")
-    # Header alanina dogrudan degiskeni gömüyoruz, artik yetkilendirme hatasi yok
     req.add_header("authorization", COLLECTAPI_AUTH)
     
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
             res_data = json.loads(response.read().decode('utf-8'))
+            
             if res_data.get("success") and "result" in res_data:
                 for hisse in res_data["result"]:
-                    if str(hisse.get("code")).upper().strip() == hisse_kod:
+                    api_code = str(hisse.get("code")).upper().strip()
+                    # Eslesme saglanirken hem ham kodu hem de .IS uzantisini kontrol ediyoruz
+                    if api_code == hisse_kod or api_code == f"{hisse_kod}.IS":
                         fiyat_ham = hisse.get("price") or hisse.get("rate") or "0"
-                        fiyat = float(str(fiyat_ham).replace(".", "").replace(",", "."))
-                        
                         oran_ham = hisse.get("chg") or hisse.get("change") or "0.00"
-                        oran_str = str(oran_ham).replace(",", ".").replace("%", "").strip()
+                        hacim_ham = hisse.get("volume") or "0"
                         
-                        hacim_ham = hisse.get("volume") or 350000000
-                        hacim = float(str(hacim_ham).replace(".", "").replace(",", "."))
+                        fiyat = clean_float(fiyat_ham)
+                        if fiyat > 100000:
+                            fiyat = fiyat / 100.0
+                            
+                        oran_str = str(oran_ham).replace("%", "").strip()
+                        hacim = clean_float(hacim_ham)
                         
                         return {
+                            "success": True,
                             "fiyat": round(fiyat, 2),
                             "oran": f"+{oran_str}" if "-" not in oran_str else oran_str,
-                            "hacim": hacim
+                            "hacim": hacim,
+                            "msg": "Canli API Verisi"
                         }
+                        
+            # Eger success False ise veya liste bossa API hatasini yakalayalim
+            return {"success": False, "msg": f"API baglantisi basarili ama {hisse_kod} listede bulunamadi."}
     except Exception as e:
-        print(f"API Veri Hatasi: {e}")
-        
-    if hisse_kod == "EREGL":
-        return {"fiyat": 40.46, "oran": "+1.10", "hacim": 253010000.0}
-    elif hisse_kod == "THYAO":
-        return {"fiyat": 315.25, "oran": "+0.95", "hacim": 7330000000.0}
-        
-    return {"fiyat": 50.00, "oran": "+0.00", "hacim": 150000000.0}
+        return {"success": False, "msg": f"CollectAPI baglanti hatasi olustu: {str(e)}"}
 
 def openrouter_ai_analiz(hisse_kod, data, para_durumu, destek_direnc_metni):
     system_instruction = (
@@ -108,20 +134,25 @@ def openrouter_ai_analiz(hisse_kod, data, para_durumu, destek_direnc_metni):
             res = json.loads(response.read().decode('utf-8'))
             return res['choices'][0]['message']['content'].strip()
     except Exception as e:
-        print(f"AI Baglanti Hatasi: {e}")
         return "Tahtada hacim dengeli gidiyor kral, destek seviyelerini yakindan takip edelim."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Kral hos geldin! Canli analiz motoru aktif. Hisse kodunu yazman yeterli.")
+    await update.message.reply_text("Kral hos geldin! Canli seans verileriyle senkronize analiz motoru aktif.")
 
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
     if hisse_kod.startswith("/"):
         return
 
-    bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} için veriler doğrulanıyor...")
+    bekleniyor_mesajı = await update.message.reply_text(f"⚡ {hisse_kod} için seans verileri doğrulanıyor...")
     
     hisse_verisi = get_bist_collectapi(hisse_kod)
+    
+    # EGER API VERIYI CEKEMEDIYSE KULLANICIYA GIZLEMIYORUZ, DOĞRUDAN HATAYI BASIYORUZ
+    if not hisse_verisi["success"]:
+        await bekleniyor_mesajı.edit_text(f"❌ *Veri Alınamadı Kral!*\n\nSebep: {hisse_verisi['msg']}\n\nLütfen CollectAPI panelinden BIST paketinin aktif olup olmadigini kontrol et.")
+        return
+
     fiyat = hisse_verisi['fiyat']
 
     destek1 = round(fiyat * 0.97, 2)
@@ -133,45 +164,5 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     destek_direnc_metni = f"🔺 Direnç 1: {direnc1} TL\n🔺 Direnç 2: {direnc2} TL\n🔻 Destek 1: {destek1} TL\n🔻 Destek 2: {destek2} TL\n🛑 Stop-Loss: {stop_loss} TL"
 
     try:
-        oran_val = float(str(hisse_verisi['oran']).replace("+", "").strip())
-    except:
-        oran_val = 0.0
-
-    hacim_val = float(hisse_verisi['hacim'])
-    para_net = (hacim_val * (oran_val / 100)) * 0.18
-    para_net_milyon = round(abs(para_net) / 1_000_000, 2)
-
-    if oran_val > 0:
-        para_durumu = f"🟢 +{para_net_milyon} Milyon TL (Net Para Girişi var)"
-    elif oran_val < 0:
-        para_durumu = f"🔴 -{para_net_milyon} Milyon TL (Net Para Çıkışı var)"
-    else:
-        para_durumu = f"🟡 0.00 TL (Yatay Dengede)"
-
-    ai_yorum = openrouter_ai_analiz(hisse_kod, hisse_verisi, para_durumu, destek_direnc_metni)
-    grafik_url = f"https://tr.tradingview.com/symbols/BIST-{hisse_kod}/"
-
-    final_text = (
-        f"📊 *{hisse_kod} Teknik Analiz Raporu*\n\n"
-        f"💰 *Canlı Fiyat:* {fiyat} TL\n"
-        f"📈 *Günlük Değişim:* %{hisse_verisi['oran']}\n"
-        f"🔥 *Hacim Durumu:* {format_hacim(hisse_verisi['hacim'])}\n"
-        f"💸 *Para Giriş/Çıkış:* {para_durumu}\n\n"
-        f"🧠 *Borsa Uzmanı Yorumu:* \n{ai_yorum}\n\n"
-        f"🎯 *Kritik Seviyeler:*\n{destek_direnc_metni}\n\n"
-        f"📈 *Canlı Grafik:* [TradingView'da Aç]({grafik_url})\n\n"
-        f"⚠️ _Not: Analiz modeli tarafından otomatik üretilmiştir, yatırım tavsiyesi değildir._"
-    )
-
-    await bekleniyor_mesajı.edit_text(final_text, parse_mode="Markdown", disable_web_page_preview=True)
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    json_data = await request.json()
-    update = Update.de_json(json_data, bot)
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, analiz_et))
-    await application.initialize()
-    await application.process_update(update)
-    return {"status": "ok"}
+        clean_oran = str(hisse_verisi['oran']).replace("+", "").replace("%", "").strip()
+        oran_val = float(clean_
