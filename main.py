@@ -18,7 +18,7 @@ app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "CollectAPI Guncel Seans Motoru Aktif"}
+    return {"status": "Zirhli Seans Motoru Aktif"}
 
 def clean_float(val_str):
     if not val_str:
@@ -70,7 +70,6 @@ def get_bist_collectapi(hisse_kod):
             if res_data.get("success") and "result" in res_data:
                 for hisse in res_data["result"]:
                     api_code = str(hisse.get("code")).upper().strip()
-                    # Eslesme saglanirken hem ham kodu hem de .IS uzantisini kontrol ediyoruz
                     if api_code == hisse_kod or api_code == f"{hisse_kod}.IS":
                         fiyat_ham = hisse.get("price") or hisse.get("rate") or "0"
                         oran_ham = hisse.get("chg") or hisse.get("change") or "0.00"
@@ -91,10 +90,9 @@ def get_bist_collectapi(hisse_kod):
                             "msg": "Canli API Verisi"
                         }
                         
-            # Eger success False ise veya liste bossa API hatasini yakalayalim
-            return {"success": False, "msg": f"API baglantisi basarili ama {hisse_kod} listede bulunamadi."}
+            return {"success": False, "msg": f"API basarili ama {hisse_kod} listede yok."}
     except Exception as e:
-        return {"success": False, "msg": f"CollectAPI baglanti hatasi olustu: {str(e)}"}
+        return {"success": False, "msg": f"CollectAPI baglanti hatasi: {str(e)}"}
 
 def openrouter_ai_analiz(hisse_kod, data, para_durumu, destek_direnc_metni):
     system_instruction = (
@@ -137,7 +135,7 @@ def openrouter_ai_analiz(hisse_kod, data, para_durumu, destek_direnc_metni):
         return "Tahtada hacim dengeli gidiyor kral, destek seviyelerini yakindan takip edelim."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Kral hos geldin! Canli seans verileriyle senkronize analiz motoru aktif.")
+    await update.message.reply_text("Kral hos geldin! Canli seans motoru aktif.")
 
 async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hisse_kod = update.message.text.upper().strip()
@@ -148,9 +146,8 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     hisse_verisi = get_bist_collectapi(hisse_kod)
     
-    # EGER API VERIYI CEKEMEDIYSE KULLANICIYA GIZLEMIYORUZ, DOĞRUDAN HATAYI BASIYORUZ
     if not hisse_verisi["success"]:
-        await bekleniyor_mesajı.edit_text(f"❌ *Veri Alınamadı Kral!*\n\nSebep: {hisse_verisi['msg']}\n\nLütfen CollectAPI panelinden BIST paketinin aktif olup olmadigini kontrol et.")
+        await bekleniyor_mesajı.edit_text(f"❌ *Veri Alınamadı Kral!*\n\nSebep: {hisse_verisi['msg']}")
         return
 
     fiyat = hisse_verisi['fiyat']
@@ -165,4 +162,45 @@ async def analiz_et(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         clean_oran = str(hisse_verisi['oran']).replace("+", "").replace("%", "").strip()
-        oran_val = float(clean_
+        oran_val = float(clean_oran)
+    except:
+        oran_val = 0.0
+
+    hacim_val = float(hisse_verisi['hacim'])
+    para_net = (hacim_val * (oran_val / 100)) * 0.18
+    para_net_milyon = round(abs(para_net) / 1_000_000, 2)
+
+    if oran_val > 0:
+        para_durumu = f"🟢 +{para_net_milyon} Milyon TL (Net Para Girişi var)"
+    elif oran_val < 0:
+        para_durumu = f"🔴 -{para_net_milyon} Milyon TL (Net Para Çıkışı var)"
+    else:
+        para_durumu = f"🟡 0.00 TL (Yatay Dengede)"
+
+    ai_yorum = openrouter_ai_analiz(hisse_kod, hisse_verisi, para_durumu, destek_direnc_metni)
+    grafik_url = f"https://tr.tradingview.com/symbols/BIST-{hisse_kod}/"
+
+    final_text = (
+        f"📊 *{hisse_kod} Teknik Analiz Raporu*\n\n"
+        f"💰 *Canlı Fiyat:* {fiyat} TL\n"
+        f"📈 *Günlük Değişim:* %{hisse_verisi['oran']}\n"
+        f"🔥 *Hacim Durumu:* {format_hacim(hisse_verisi['hacim'])}\n"
+        f"💸 *Para Giriş/Çıkış:* {para_durumu}\n\n"
+        f"🧠 *Borsa Uzmanı Yorumu:* \n{ai_yorum}\n\n"
+        f"🎯 *Kritik Seviyeler:*\n{destek_direnc_metni}\n\n"
+        f"📈 *Canlı Grafik:* [TradingView'da Aç]({grafik_url})\n\n"
+        f"⚠️ _Not: Analiz modeli tarafından otomatik üretilmiştir, yatırım tavsiyesi değildir._"
+    )
+
+    await bekleniyor_mesajı.edit_text(final_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    json_data = await request.json()
+    update = Update.de_json(json_data, bot)
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, analiz_et))
+    await application.initialize()
+    await application.process_update(update)
+    return {"status": "ok"}
